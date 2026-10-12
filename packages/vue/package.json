@@ -86,7 +86,8 @@
     "url": "git+https://github.com/vuejs/core.git"
   },
   "keywords": [
-    "vue"
+    "vue",
+    "smoke-test"
   ],
   "author": "Evan You",
   "license": "MIT",

@@ -1,0 +1,17 @@
+{
+  "name": "vue-release-smoke-app",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "vite build --ssrManifest --outDir dist/client && vite build --ssr src/entry-server.js --outDir dist/server",
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "vue": "workspace:*",
+    "vue-router": "5.3.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "catalog:",
+    "vite": "catalog:"
+  }
+}

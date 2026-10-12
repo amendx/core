@@ -138,6 +138,16 @@ export default defineConfig(
     },
   },
 
+  // Release smoke test app: a standalone node + browser app, not library code
+  {
+    files: ['packages-private/release-smoke-app/**'],
+    rules: {
+      'no-restricted-globals': 'off',
+      'no-restricted-syntax': 'off',
+      'no-console': 'off',
+    },
+  },
+
   // JavaScript files
   {
     files: ['*.js'],
