@@ -20,6 +20,11 @@ export const routes = [
     component: () => import('./pages/SuspensePage.vue'),
   },
   {
+    path: '/lazy',
+    name: 'lazy',
+    component: () => import('./pages/LazyPage.vue'),
+  },
+  {
     path: '/teleport',
     name: 'teleport',
     component: () => import('./pages/TeleportPage.vue'),
