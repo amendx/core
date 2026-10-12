@@ -1,0 +1,94 @@
+name: release-smoke
+
+# Publishes every package the way a release does, into a throwaway local
+# registry, then server-renders and hydrates every route of a fresh SSR app
+# installed only from it. See scripts/release-smoke/index.js.
+on:
+  workflow_dispatch:
+  # release PRs: PRs that change a `version` in packages/*/package.json
+  pull_request:
+    branches:
+      - main
+      - minor
+    paths:
+      - 'packages/*/package.json'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  detect:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    outputs:
+      release: ${{ steps.versions.outputs.release }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          # the PR merge commit and its first parent, the base
+          fetch-depth: 2
+
+      - name: Check for version changes
+        id: versions
+        run: |
+          release=false
+          for file in $(git diff --name-only HEAD^1 HEAD -- 'packages/*/package.json'); do
+            [ -f "$file" ] || continue
+            old=$(git show "HEAD^1:$file" 2>/dev/null | node -p 'JSON.parse(require("fs").readFileSync(0, "utf-8")).version' || echo none)
+            new=$(node -p "require('./$file').version")
+            if [ "$old" != "$new" ]; then
+              echo "$file: $old -> $new"
+              release=true
+            fi
+          done
+          echo "release=$release" >> "$GITHUB_OUTPUT"
+
+  smoke:
+    needs: detect
+    if: ${{ !failure() && !cancelled() && (github.event_name == 'workflow_dispatch' || needs.detect.outputs.release == 'true') }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # arm64 macOS and x64 Linux
+        os: [macos-15, ubuntu-24.04]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    env:
+      PUPPETEER_SKIP_DOWNLOAD: 'true'
+      PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/temp/ms-playwright
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup cache for Playwright browsers
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: temp/ms-playwright
+          key: playwright-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('pnpm-lock.yaml') }}
+
+      - name: Setup cache for verdaccio extracted from its image
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: temp/release-smoke/verdaccio
+          key: release-smoke-verdaccio-${{ runner.os }}-${{ hashFiles('scripts/release-smoke/verdaccio-image.js') }}
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+
+      - name: Install Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: '.node-version'
+          cache: 'pnpm'
+
+      - run: pnpm install
+      - run: pnpm exec playwright install chromium
+
+      - name: Publish to a local registry and smoke-test an SSR app
+        run: pnpm release-smoke
